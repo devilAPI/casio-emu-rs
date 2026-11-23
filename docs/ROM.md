@@ -19,6 +19,10 @@ The firmware is decrypted/assembled at runtime into two heap buffers inside
 resource that can simply be copied out of the DLL. The ROM is therefore
 extracted from the running emulator.
 
+> Obtain the official emulator from CASIO (https://edu.casio.com/) or your
+> licensed installer. This project intentionally does not link to third-party
+> firmware mirrors.
+
 ## Extract the ROM
 
 ### Linux + Wine
