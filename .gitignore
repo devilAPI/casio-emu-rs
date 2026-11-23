@@ -1,0 +1,12 @@
+/target
+/fx991es.rom.bin
+*.rom
+*.rom.bin
+*.bin
+lcd.pbm
+/assets/skin.png
+/assets/skin.bmp
+/web/www/pkg
+/web/www/skin.png
+/web/www/fx991es.rom.bin
+/web/www/skin.bmp

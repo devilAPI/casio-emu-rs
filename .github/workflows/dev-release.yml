@@ -1,0 +1,120 @@
+name: Dev release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            archive: fx991es-rs-linux-x86_64.tar.gz
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: fx991es-rs-windows-x86_64.zip
+          - name: macos-x86_64
+            os: macos-14
+            target: x86_64-apple-darwin
+            archive: fx991es-rs-macos-x86_64.tar.gz
+          - name: macos-aarch64
+            os: macos-14
+            target: aarch64-apple-darwin
+            archive: fx991es-rs-macos-aarch64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        shell: bash
+        run: cargo build -p fx991es-rs --release --target "${{ matrix.target }}"
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          BIN="target/${{ matrix.target }}/release/fx991es-rs"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "${BIN}.exe" dist/
+          else
+            cp "$BIN" dist/
+          fi
+          cp README.md LICENSE dist/
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "${{ matrix.archive }}" ./dist/*
+          else
+            tar -czf "${{ matrix.archive }}" -C dist .
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+
+  web:
+    name: Build web
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.130
+
+      - name: Build web app
+        run: ./web/build.sh
+
+      - name: Package web
+        run: |
+          set -euo pipefail
+          cd web
+          zip -r ../fx991es-web.zip www
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: fx991es-web.zip
+          if-no-files-found: error
+
+  release:
+    name: Update dev release
+    needs: [build, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish dev prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: Development build
+          prerelease: true
+          make_latest: false
+          generate_release_notes: false
+          files: artifacts/*
