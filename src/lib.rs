@@ -7,4 +7,5 @@
 pub mod cpu;
 pub mod keys;
 pub mod machine;
+pub mod model;
 pub mod table;

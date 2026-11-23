@@ -480,6 +480,8 @@ pub const KEYS: &[CalcKey] = &[
     },
 ];
 
+include!("vnx_keys.inc");
+
 /// Keyboard mapping used by the desktop frontend.
 pub fn pc_key(label: &str) -> Option<(u8, u8)> {
     Some(match label {
@@ -498,7 +500,8 @@ pub fn pc_key(label: &str) -> Option<(u8, u8)> {
         "-" => (0x01, 0x10),
         "X" => (0x02, 0x08),
         "/" => (0x02, 0x10),
-        "=" => (0x01, 0x40),
+        "=" | "EXE" | "Return" => (0x01, 0x40),
+        "SPACE" => (0x04, 0x10),
         "AC" => (0x04, 0x10),
         "DEL" => (0x04, 0x08),
         "SHIFT" => (0x80, 0x01),

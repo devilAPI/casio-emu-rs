@@ -40,6 +40,10 @@ pub struct Cpu {
     /// Data segment selected by a DSR prefix for the next instruction.
     pub cur_dsr: u8,
     pub cycles: u64,
+    /// Delayed PSW snapshots.  The nX-U8 applies a change of the MIE bit only
+    /// after three clocks, so the CW ii interrupt controller uses the oldest
+    /// snapshot.  ES PLUS and ClassWiz boards are unaffected.
+    psw_backup: [u8; 3],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,6 +155,7 @@ impl Cpu {
             regs: Regs::default(),
             cur_dsr: 0,
             cycles: 0,
+            psw_backup: [0; 3],
         }
     }
 
@@ -158,6 +163,7 @@ impl Cpu {
         self.regs = Regs::default();
         self.cur_dsr = 0;
         self.cycles = 0;
+        self.psw_backup = [0; 3];
         self.regs.sp = bus.read_data(0, 0x0000, 2) as u16;
         self.regs.pc = bus.read_data(0, 0x0002, 2) as u16;
     }
@@ -166,6 +172,62 @@ impl Cpu {
         let word = bus.read_code(self.regs.csr, self.regs.pc, 2) as u16;
         self.regs.pc = self.regs.pc.wrapping_add(2);
         word
+    }
+
+    /// Take a maskable exception with the full nX-U8 `Raise` sequence used by
+    /// the CW ii board: save PSW/PC/CSR into the exception-level registers,
+    /// clear MIE when entering level 1, set the new exception level, and vector
+    /// through `index * 2` in code segment 0.  Only CW ii calls this; the ES
+    /// PLUS and ClassWiz boards keep their own delivery paths.
+    pub fn raise(&mut self, exception_level: usize, index: usize, bus: &mut dyn Bus) {
+        let el = exception_level.min(3);
+        self.regs.epsw[el] = self.regs.psw;
+        self.regs.elr[el] = self.regs.pc;
+        self.regs.ecsr[el] = self.regs.csr;
+        if el == 1 {
+            self.regs.psw &= !PSW_MIE;
+        }
+        self.regs.psw = (self.regs.psw & !PSW_EL) | el as u8;
+        self.regs.csr = 0;
+        self.regs.pc = bus.read_code(0, (index * 2) as u16, 2) as u16;
+    }
+
+    /// Deliver a maskable interrupt, as the nX-U8 does when the chipset
+    /// accepts a pending source and the master interrupt enable (MIE) is set.
+    ///
+    /// The CPU saves the return address/code segment at exception level 1,
+    /// enters level 1, clears MIE and vectors through `ReadCode(index * 2)`
+    /// in code segment 0.  EPSW is deliberately *not* saved here: that is
+    /// what the reference core (user202729/CasioEmu `CPU::Raise`) does for
+    /// maskable sources, and the firmware restores PSW with `H_RTI`.
+    pub fn raise_maskable(&mut self, bus: &mut dyn Bus, index: usize) {
+        if self.regs.psw & PSW_MIE == 0 {
+            return;
+        }
+        self.regs.psw &= !PSW_MIE;
+        self.regs.psw = (self.regs.psw & !PSW_EL) | 1;
+        self.regs.elr[1] = self.regs.pc;
+        self.regs.ecsr[1] = self.regs.csr;
+        self.regs.csr = 0;
+        self.regs.pc = bus.read_code(0, (index * 2) as u16, 2) as u16;
+    }
+
+    /// Accept a maskable interrupt with the ClassWiz (HW id 4) chipset
+    /// sequence: save ELR/ECSR/EPSW at level 1, clear MIE, enter level 1 and
+    /// fetch the 16-bit vector at `index * 2`.  Returns `false` when the
+    /// interrupt cannot be taken (MIE clear or already at a higher level).
+    pub fn accept_maskable_interrupt(&mut self, bus: &mut dyn Bus, index: u8) -> bool {
+        let el = (self.regs.psw & PSW_EL) as usize;
+        if self.regs.psw & PSW_MIE == 0 || el > 1 {
+            return false;
+        }
+        self.regs.epsw[1] = self.regs.psw;
+        self.regs.elr[1] = self.regs.pc;
+        self.regs.ecsr[1] = self.regs.csr;
+        self.regs.psw = (self.regs.psw & !(PSW_MIE | PSW_EL)) | 1;
+        self.regs.csr = 0;
+        self.regs.pc = bus.read_code(0, (index as u16) * 2, 2) as u16;
+        true
     }
 
     pub fn step(&mut self, bus: &mut dyn Bus) {
@@ -191,7 +253,20 @@ impl Cpu {
         };
 
         (handler_for(spec.handler))(self, bus, spec.flags, op0, op1);
+        // Delayed MIE snapshot for the CW ii interrupt controller.  Shifting
+        // zero into the history on reset and on every step is what makes the
+        // acceptance test see the value three clocks ago; ES PLUS/ClassWiz
+        // never read it, so their behaviour is unchanged.
+        self.psw_backup[2] = self.psw_backup[1];
+        self.psw_backup[1] = self.psw_backup[0];
+        self.psw_backup[0] = self.regs.psw;
         self.cycles = self.cycles.wrapping_add(1);
+    }
+
+    /// Master interrupt enable as seen by the CW ii interrupt controller:
+    /// the value three clocks ago, not the current PSW bit.
+    pub fn master_interrupt_enable(&self) -> bool {
+        self.psw_backup[2] & PSW_MIE != 0
     }
 
     fn resolve_operand(&mut self, bus: &mut dyn Bus, spec: OperandSpec, val: u32) -> Operand {
@@ -1109,6 +1184,42 @@ mod tests {
         cpu.step(&mut bus);
         assert_eq!(cpu.regs.gp[0], 0x0b);
         assert_eq!(cpu.regs.psw & PSW_C, 0);
+    }
+
+    #[test]
+    fn maskable_interrupt_saves_state_and_jumps_to_vector() {
+        let mut bus = TestBus::new(&[]);
+        // Vector 9 (timer) lives at code address 0x0012.
+        bus.code[0x12] = 0x34;
+        bus.code[0x13] = 0x12;
+        let mut cpu = Cpu::new();
+        cpu.regs.pc = 0x2345;
+        cpu.regs.csr = 2;
+        cpu.regs.psw = 0x09; // MIE set, EL 1
+        cpu.regs.gp[0] = 0x5A;
+        assert!(cpu.accept_maskable_interrupt(&mut bus, 9));
+        assert_eq!(cpu.regs.pc, 0x1234);
+        assert_eq!(cpu.regs.csr, 0);
+        assert_eq!(cpu.regs.elr[1], 0x2345);
+        assert_eq!(cpu.regs.ecsr[1], 2);
+        assert_eq!(cpu.regs.epsw[1], 0x09);
+        assert_eq!(cpu.regs.psw & PSW_MIE, 0);
+        assert_eq!(cpu.regs.psw & PSW_EL, 1);
+        assert_eq!(cpu.regs.gp[0], 0x5A);
+    }
+
+    #[test]
+    fn maskable_interrupt_is_rejected_when_disabled_or_nested() {
+        let mut bus = TestBus::new(&[]);
+        bus.code[0x0A] = 0x00;
+        bus.code[0x0B] = 0x90;
+        let mut cpu = Cpu::new();
+        cpu.regs.psw = 0x00; // MIE clear
+        assert!(!cpu.accept_maskable_interrupt(&mut bus, 5));
+        assert_eq!(cpu.regs.pc, 0);
+        cpu.regs.psw = 0x0A; // MIE set, EL 2
+        assert!(!cpu.accept_maskable_interrupt(&mut bus, 5));
+        assert_eq!(cpu.regs.pc, 0);
     }
 
     #[test]

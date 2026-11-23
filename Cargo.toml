@@ -3,18 +3,18 @@ members = [".", "web"]
 resolver = "2"
 
 [package]
-name = "fx991es-rs"
+name = "casio-emu-rs"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-description = "Cross-platform Casio fx-991ES PLUS C emulator written in Rust"
+description = "Cross-platform Casio nX-U8/100 calculator emulator written in Rust"
 
 [lib]
-name = "fx991es_rs"
+name = "casio_emu_rs"
 path = "src/lib.rs"
 
 [[bin]]
-name = "fx991es-rs"
+name = "casio-emu-rs"
 path = "src/main.rs"
 required-features = ["desktop"]
 

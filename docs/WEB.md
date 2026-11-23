@@ -1,8 +1,10 @@
 # Web / WebAssembly build
 
 The browser frontend uses the same Rust core compiled to WebAssembly. The
-canvas is responsive: the device image scales with the window and the LCD
-overlay is redrawn at the scaled position.
+canvas keeps the 289:582 aspect ratio at any viewport size (width is derived
+from the height budget instead of letting `max-width` squash it), and its
+backing store is sized to the display's device-pixel ratio so the LCD and
+clickable keys stay sharp. The LCD overlay is redrawn in design coordinates.
 
 ## Build
 
@@ -16,7 +18,7 @@ Requirements:
 rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.130 --locked
 
-cd fx991es-rs
+cd casio-emu-rs
 ./web/build.sh
 ```
 
@@ -44,7 +46,7 @@ which is useful for screenshots.
 
 The generated `web/www` directory is a static site. Publish it with GitHub
 Pages, Netlify, Cloudflare Pages, or any static host. The repository's
-release workflow attaches a `fx991es-web.zip` artifact containing:
+release workflow attaches a `casio-emu-web.zip` artifact containing:
 
 - `index.html`
 - `main.js`

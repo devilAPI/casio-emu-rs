@@ -36,11 +36,11 @@ gcc -O2 -std=c99 -I"$U8EMU_DIR" -o "$TMP/keyseq_one" tools/accuracy/keyseq_one.c
   "$U8EMU_DIR/src/core/mem.c"
 
 echo "building Rust release..."
-cargo build --release -p fx991es-rs >/dev/null
+cargo build --release -p casio-emu-rs >/dev/null
 
 echo "10M-instruction register/memory trace..."
 (cd "$TMP" && ./hash "$STEPS" | head -n -1) > "$TMP/c.hash"
-./target/release/fx991es-rs --rom "$ROM" --trace-hash "$STEPS" > "$TMP/r.hash"
+./target/release/casio-emu-rs --rom "$ROM" --trace-hash "$STEPS" > "$TMP/r.hash"
 if ! diff -q "$TMP/c.hash" "$TMP/r.hash" >/dev/null; then
   echo "TRACE MISMATCH" >&2
   diff "$TMP/c.hash" "$TMP/r.hash" | head -20 >&2

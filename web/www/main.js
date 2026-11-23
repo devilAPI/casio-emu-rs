@@ -1,16 +1,65 @@
-import init, { Emulator, key_table_json } from './pkg/fx991es_web.js';
+import init, { Emulator, key_table_json, model_ids } from './pkg/casio_emu_web.js';
 
 const canvas = document.getElementById('calc');
 const ctx = canvas.getContext('2d', { alpha: false });
 const status = document.getElementById('status');
 const romInput = document.getElementById('romfile');
 const resetButton = document.getElementById('reset');
+const modelSelect = document.getElementById('model');
 
-// Geometry of the official 289x582 skin.
+// Design space of the official 289x582 skin.  Everything below is drawn in
+// these coordinates and then scaled once to the device-pixel backing store,
+// so the UI stays crisp at any window size or display density.
+const DESIGN = { w: 289, h: 582 };
 const LCD = { x0: 39, y0: 94, x1: 254, y1: 179 };
 const KEYPAD = { x0: 10, y0: 190, x1: 280, y1: 575 };
 const GRID_W = 43;
 const GRID_H = 28;
+
+// Palette shared with style.css.
+const cssVars = getComputedStyle(document.documentElement);
+const cssColor = (name, fallback) => cssVars.getPropertyValue(name).trim() || fallback;
+const COLORS = {
+  lcdBg: cssColor('--lcd-bg', '#cfd6c2'),
+  lcdFg: cssColor('--lcd-fg', '#3c4536'),
+  device: cssColor('--device', '#d9d0c2'),
+  deviceEdge: cssColor('--device-edge', '#b7ac9d'),
+  key: cssColor('--key', '#4a4250'),
+  bezel: cssColor('--bezel', '#3a323c'),
+  accent: cssColor('--accent', '#c9a584'),
+  text: cssColor('--text', '#eae2d8'),
+  panel: cssColor('--panel', '#2f2832'),
+};
+
+let cssW = DESIGN.w;
+let cssH = DESIGN.h;
+
+function measureCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width > 0) cssW = rect.width;
+  if (rect.height > 0) cssH = rect.height;
+}
+
+function syncCanvas() {
+  // Match the backing store to the displayed size in device pixels, then draw
+  // in design coordinates.  Capping the DPR avoids enormous canvases on 4K
+  // phones without making the UI look soft.
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const bw = Math.max(1, Math.round(cssW * dpr));
+  const bh = Math.max(1, Math.round(cssH * dpr));
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
+  }
+  ctx.setTransform(bw / DESIGN.w, 0, 0, bh / DESIGN.h, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+}
+
+measureCanvas();
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(measureCanvas).observe(canvas);
+}
+window.addEventListener('resize', measureCanvas);
 
 const skin = new Image();
 skin.src = 'skin.png';
@@ -19,6 +68,16 @@ let keyTable = [];
 
 let emu = null;
 let skinReady = false;
+let lcdW = 96;
+let lcdH = 32;
+
+function updateLcdSize() {
+  if (!emu) return;
+  const width = emu.lcdWidth || emu.lcd_width;
+  const height = emu.lcdHeight || emu.lcd_height;
+  if (typeof width === 'function') lcdW = width.call(emu);
+  if (typeof height === 'function') lcdH = height.call(emu);
+}
 
 skin.addEventListener('load', () => { skinReady = true; });
 skin.addEventListener('error', () => {
@@ -73,15 +132,38 @@ window.addEventListener('keyup', (e) => {
   emu.release();
 }, { passive: false });
 
+let romBytes = null;
+
 async function loadRom(bytes) {
+  romBytes = bytes;
   try {
-    emu = new Emulator(bytes);
-    status.textContent = `ROM loaded (${bytes.length.toLocaleString()} bytes). Running.`;
+    const id = modelSelect.value;
+    emu = id ? Emulator.new_with_model(bytes, id) : new Emulator(bytes);
+    updateLcdSize();
+    modelSelect.value = emu.modelId ? emu.modelId() : id;
+    status.textContent = `${emu.modelName()} — ROM loaded (${bytes.length.toLocaleString()} bytes). Running.`;
   } catch (err) {
     console.error(err);
     status.textContent = `Could not start ROM: ${err}`;
   }
 }
+
+async function switchModel(id) {
+  if (!romBytes) {
+    modelSelect.value = '';
+    return;
+  }
+  try {
+    emu = id ? Emulator.new_with_model(romBytes, id) : new Emulator(romBytes);
+    updateLcdSize();
+    status.textContent = `${emu.modelName()} — model switched. Running.`;
+  } catch (err) {
+    console.error(err);
+    status.textContent = `Could not switch model: ${err}`;
+  }
+}
+
+modelSelect.addEventListener('change', (e) => switchModel(e.target.value));
 
 romInput.addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
@@ -99,8 +181,9 @@ function hitKey(x, y) {
 canvas.addEventListener('pointerdown', (e) => {
   if (!emu) return;
   const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * canvas.width / rect.width;
-  const y = (e.clientY - rect.top) * canvas.height / rect.height;
+  // Map directly into design coordinates regardless of CSS size or DPR.
+  const x = (e.clientX - rect.left) * DESIGN.w / rect.width;
+  const y = (e.clientY - rect.top) * DESIGN.h / rect.height;
   const key = hitKey(x, y);
   if (!key) return;
   if (key.label === 'ON') {
@@ -113,21 +196,21 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 function drawLcd(lcd) {
-  ctx.fillStyle = '#d6e3d6';
+  ctx.fillStyle = COLORS.lcdBg;
   ctx.fillRect(LCD.x0, LCD.y0, LCD.x1 - LCD.x0, LCD.y1 - LCD.y0);
-  ctx.fillStyle = '#101810';
+  ctx.fillStyle = COLORS.lcdFg;
   const w = LCD.x1 - LCD.x0;
   const h = LCD.y1 - LCD.y0;
-  for (let y = 0; y < 32; y++) {
+  for (let y = 0; y < lcdH; y++) {
     let x = 0;
-    while (x < 96) {
-      if (!lcd[y * 96 + x]) { x++; continue; }
+    while (x < lcdW) {
+      if (!lcd[y * lcdW + x]) { x++; continue; }
       let run = x;
-      while (run < 96 && lcd[y * 96 + run]) run++;
-      const dx0 = LCD.x0 + Math.floor(x * w / 96);
-      const dx1 = LCD.x0 + Math.floor(run * w / 96);
-      const dy0 = LCD.y0 + Math.floor(y * h / 32);
-      const dy1 = LCD.y0 + Math.floor((y + 1) * h / 32);
+      while (run < lcdW && lcd[y * lcdW + run]) run++;
+      const dx0 = LCD.x0 + Math.floor(x * w / lcdW);
+      const dx1 = LCD.x0 + Math.floor(run * w / lcdW);
+      const dy0 = LCD.y0 + Math.floor(y * h / lcdH);
+      const dy1 = LCD.y0 + Math.floor((y + 1) * h / lcdH);
       ctx.fillRect(dx0, dy0, dx1 - dx0, dy1 - dy0);
       x = run;
     }
@@ -135,16 +218,23 @@ function drawLcd(lcd) {
 }
 
 function drawFallback() {
-  ctx.fillStyle = '#2b2c33';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = COLORS.panel;
+  ctx.fillRect(0, 0, DESIGN.w, DESIGN.h);
 
-  ctx.fillStyle = '#d8d8dc';
+  // Warm ivory body with a soft edge.
   ctx.beginPath();
-  ctx.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 18);
+  ctx.roundRect(8, 8, DESIGN.w - 16, DESIGN.h - 16, 20);
+  ctx.fillStyle = COLORS.device;
   ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = COLORS.deviceEdge;
+  ctx.stroke();
 
-  ctx.fillStyle = '#3a3a40';
-  ctx.fillRect(LCD.x0 - 5, LCD.y0 - 5, LCD.x1 - LCD.x0 + 10, LCD.y1 - LCD.y0 + 10);
+  // Recessed bezel around the LCD.
+  ctx.beginPath();
+  ctx.roundRect(LCD.x0 - 6, LCD.y0 - 6, LCD.x1 - LCD.x0 + 12, LCD.y1 - LCD.y0 + 12, 6);
+  ctx.fillStyle = COLORS.bezel;
+  ctx.fill();
 
   const kw = (KEYPAD.x1 - KEYPAD.x0) / GRID_W;
   const kh = (KEYPAD.y1 - KEYPAD.y0) / GRID_H;
@@ -155,19 +245,21 @@ function drawFallback() {
     const y = KEYPAD.y0 + k.y0 * kh;
     const w = (k.x1 - k.x0) * kw - 2;
     const h = (k.y1 - k.y0) * kh - 2;
-    ctx.fillStyle = k.label === 'ON' ? '#ff8844' : '#44444c';
+    const on = k.label === 'ON';
     ctx.beginPath();
-    ctx.roundRect(x + 1, y + 1, w, h, 3);
+    ctx.roundRect(x + 1, y + 1, w, h, 4);
+    ctx.fillStyle = on ? COLORS.accent : COLORS.key;
     ctx.fill();
-    ctx.fillStyle = '#f0f0f0';
-    ctx.font = `${Math.max(5, Math.min(8, w / Math.max(1, k.label.length)))}px system-ui, sans-serif`;
+    ctx.fillStyle = on ? '#2a2329' : COLORS.text;
+    ctx.font = `${Math.max(5, Math.min(9, w / Math.max(1, k.label.length)))}px system-ui, sans-serif`;
     ctx.fillText(k.label, x + 1 + w / 2, y + 1 + h / 2);
   }
 }
 
 function draw() {
+  syncCanvas();
   if (skinReady) {
-    ctx.drawImage(skin, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(skin, 0, 0, DESIGN.w, DESIGN.h);
   } else {
     drawFallback();
   }
@@ -185,25 +277,34 @@ function frame() {
 async function boot() {
   await init();
   keyTable = JSON.parse(key_table_json());
-// Optional convenience for local demos/tests:
-//   ?rom=fx991es.rom.bin&boot=6000000
-const params = new URLSearchParams(location.search);
-const autoRom = params.get('rom');
-if (autoRom) {
   try {
-    const res = await fetch(autoRom);
-    if (res.ok) {
-      await loadRom(new Uint8Array(await res.arrayBuffer()));
-      const bootSteps = Number.parseInt(params.get('boot') || '0', 10);
-      if (emu && bootSteps > 0) emu.step(bootSteps);
+    for (const m of JSON.parse(model_ids())) {
+      const option = document.createElement('option');
+      option.value = m.id;
+      option.textContent = m.name;
+      modelSelect.appendChild(option);
     }
   } catch (e) {
-    console.warn('auto ROM load failed', e);
+    console.warn('could not populate model list', e);
   }
-}
+  // Optional convenience for local demos/tests:
+  //   ?rom=fx991es.rom.bin&boot=6000000
+  const params = new URLSearchParams(location.search);
+  const autoRom = params.get('rom');
+  if (autoRom) {
+    try {
+      const res = await fetch(autoRom);
+      if (res.ok) {
+        await loadRom(new Uint8Array(await res.arrayBuffer()));
+        const bootSteps = Number.parseInt(params.get('boot') || '0', 10);
+        if (emu && bootSteps > 0) emu.step(bootSteps);
+      }
+    } catch (e) {
+      console.warn('auto ROM load failed', e);
+    }
+  }
 
-resetButton.addEventListener('click', () => { if (emu) emu.reset(); });
-
+  resetButton.addEventListener('click', () => { if (emu) emu.reset(); });
 
   draw();
   requestAnimationFrame(frame);

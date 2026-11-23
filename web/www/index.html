@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>fx-991ES PLUS C — Rust/WASM</title>
+  <title>Casio nX-U8/100 emulator — Rust/WASM</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
     <header>
-      <h1>fx-991ES PLUS C</h1>
+      <h1>Casio nX-U8/100 emulator</h1>
       <p class="sub">Rust + WebAssembly</p>
     </header>
 
@@ -21,6 +21,12 @@
       <label class="file-button">
         Load ROM dump
         <input id="romfile" type="file" accept=".bin,.rom">
+      </label>
+      <label class="model-picker">
+        Model
+        <select id="model" title="Switch calculator model">
+          <option value="">Auto-detect model</option>
+        </select>
       </label>
       <button id="reset">ON</button>
       <span id="status">Load a ROM dump from your own licensed copy to start.</span>

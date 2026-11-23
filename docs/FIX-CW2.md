@@ -1,0 +1,160 @@
+# ClassWiz II (CW ii, hardware id 5) board support
+
+Status: **board implemented; three of four target ROMs boot to a usable LCD and
+respond to keys. `fx9910cw` remains a documented gap (see §5).**
+
+All work was done in an isolated copy (`/tmp/fix-cw2`); the main repository and
+the read-only ROM dumps were not modified and no ROM was copied into the repo.
+
+## 1. Hardware parameters (from CasioEmuX `stable`, GPL-3.0)
+
+Reference files: `models/fx991cncw/model.lua`,
+`emulator/src/Chipset/MMU.cpp`, `Chipset/Chipset.cpp`, `InterruptSource.cpp`,
+`CPU.cpp`, and `Peripheral/{ROMWindow,BatteryBackedRAM,Screen,Keyboard,Timer,
+Miscellaneous,StandbyControl,BCDCalc}.cpp`. Cross-checked against
+`docs/MODELS-991CNCW.md`, `docs/MODELS-880BTG.md` and the ROM headers.
+
+| Parameter | Value |
+|---|---|
+| CPU core | nX-U8/100 (unchanged); reference selects CM_NX_U16 for CW ii |
+| CSR mask | `0x0F`; DSR mask `0x1F` |
+| ROM | 512 KiB (`fx991cw`, `fx9910cw`) or 1 MiB (`fx991cncw`, `fx880btg`) |
+| RAM | 24 KiB at data `0x9000..0xEFFF` |
+| Data ROM windows | seg 0: `0x0000..0x8FFF`; segs 1–7, 9–15: direct; seg 8: `0x80000..0x8FFDF` (+ second VRAM at `0x89000` on emulator builds) |
+| Code segments | seg 8 → ROM bank 0; segs 9–15 alias 1–7 (`csr & 7`); seg 6 and seg 7 ≥ `0x2000` unmapped; seg 0 ≥ `0xFE00` unmapped |
+| SFR page | `0xF000..0xFFFF`, same KI/KO addresses (`KI=0xF040`, mask `0xF044/45`, drive `0xF046/47`) |
+| Interrupt mask/pending | `0xF010..0xF013` / `0xF014..0xF017`, 21 maskable sources; bit *i+1* enables/flags source *i*; vector = `(5+i)*2` |
+| Keyboard IRQ | source 0 (EXI0), vector `0x000A` |
+| Timer 0 IRQ | source 4 (TM0), vector `0x0012`; registers `0xF020..0xF025` (LSCLK/HSCLK selectable) |
+| LCD | 192×64: status row + 63 dot rows, 32-byte stride, 24 displayed bytes |
+| Framebuffers | primary at `0xF800`, second at `0x89000` (emulator) / bank-switched by `0xF037` bit 2 (real HW); blended on display |
+| BCD coprocessor | `0xF400/402/404/405/410/414/415` and `0xF480/4A0/4C0/4E0` (4×12-byte registers) |
+| Boot vectors | SP `0xF000`; PC `0x636C` (fx991cncw), `0x6166` (fx991cw), `0x680A` (fx9910cw), `0x6F04` (fx880btg); CSR 0 |
+| Self-test | `71CASG` @ `0x8FDE0` (1 MiB), `EY-005A`/`FY-505A` @ `0x5FFEE` (512 KiB), `EY-023B` @ `0x71FEE` (fx880btg) |
+
+## 2. Changes
+
+### `src/model.rs`
+* `BoardKind::ClassWizII` no longer aliases ClassWiz: added
+  `CLASSWIZ2_RAM_BASE/SIZE` (`0x9000`/`0x6000`), `CLASSWIZ2_ROM_MIRROR_BASE`
+  (`0x80000`), `CLASSWIZ2_VRAM2_BASE` (`0x89000`), `CLASSWIZ2_VRAM_SIZE`
+  (`0x800`).
+* `Model::execution_supported()` now returns `true` for every model.
+
+### `src/machine.rs`
+* `Machine::ram_base/ram_size/rom_mirror_base` dispatch on `ClassWizII`.
+* `Machine::cw2_code_addr()` implements the CW ii code-segment decode above;
+  `Bus::read_code` uses it (CSR masked with `csr_mask`).
+* `cw2_data_rom_addr()` implements the data ROM-window decode; `read_data_byte`
+  and `write_data_byte` route segment 0 ROM, RAM, SFR page and VRAM2. ROM
+  windows stay read-only.
+* New `CwiiState` holds both 4 KiB framebuffers, screen control, interrupt
+  mask/pending/active, timer 0, standby control (HALT/STOP), DSR SFR, keyboard
+  EXICON and BCD registers. The SFR accessors implement the
+  mask/clear-on-write behaviour of the reference (`0xF010..0xF017`,
+  `0xF020..0xF025`, `0xF030..0xF032`, `0xF037`, `0xF400..0xF4EB`).
+* `render()` blends both CW ii framebuffers (pixel OR, equivalent to showing
+  everything drawn) with the same 32-byte/24-byte geometry as ClassWiz.
+* `Cpu::raise()`-based maskable interrupt delivery: lowest pending enabled
+  source wins, EL must be 0/1, MIE uses the 3-instruction-delayed PSW snapshot;
+  ELR/ECSR/EPSW are saved at EL1 and MIE is cleared, PC is vectored through
+  `index*2` in CSR 0. The keyboard press sets the EXI0 pending bit once.
+* Timer 0 runs from HSCLK (F024 bit 3) or the 256-cycle LSCLK, with the
+  `2^n` prescaler; SBYCON HALT/STOP halt the core until an interrupt is pending.
+  This is required because the firmware disables IRQs and STOPs between frames.
+* Checksum includes the CW ii framebuffers.
+
+### `src/cpu.rs`
+* Added `Cpu::raise()` (the nX-U8 exception entry described above) and the
+  delayed `psw_backup[3]` used by the CW ii interrupt controller. ES PLUS and
+  ClassWiz never call these paths; all existing instruction semantics are
+  unchanged.
+
+### Tests
+New ROM-free tests in `src/machine.rs`: ROM padding/size, data-window map,
+code-segment decode (including mirrors and unmapped segments), dual-VRAM
+rendering and bank switching, SFR/mask/timer behaviour, keyboard KI/KO gating
+and the DSR SFR. `model.rs`' CW ii test now asserts execution support.
+
+## 3. Validation
+
+Commands run in `/tmp/fix-cw2` with the read-only ROMs:
+
+```
+cargo build --release                 # OK, no warnings
+cargo test                            # 32 passed, 0 failed, 1 ignored
+FX991_ROM=/home/devlapi/Downloads/fx991es-rs-linux-x86_64/fx991es.rom.bin \
+  cargo test --release -- --ignored   # 1 passed (C-model accuracy, no regression)
+
+./target/release/casio-emu-rs --rom roms/<model>.rom.bin --model <model> \
+  --headless 6000000 --press 2000000:1 --dump /tmp/lcd.pbm
+```
+
+| ROM | Final PC/CSR | Lit pixels with key | Lit pixels without key | Pixels changed |
+|---|---|---|---|---|
+| `fx991cw` (512 KiB) | `6062`/`00` | 3535 | 128 | 3545 |
+| `fx9910cw` (512 KiB) | `680C`/`00` | 0 | 0 | 0 — **not booting** |
+| `fx991cncw` (1 MiB) | `612C`/`00` | 3515 | 128 | 3591 |
+| `fx880btg` (1 MiB) | `6E00`/`00` | 3535 | 128 | 3545 |
+
+For the task's exact command (`fx991cncw`) `/tmp/lcd.pbm` contains 3515 lit
+pixels and differs from the no-key run in 3591 pixels. The rendered image is
+the calculator's Chinese main menu (計算 / 統計 / 函数表格 / 方程 / 不等式 /
+复数); without a key press the board idles on the `CASIO — Boost your
+Curiosity` splash. Pressing `1` at 2 M instructions is observed by the firmware
+as KI `0xFE` on KO `0x01` and wakes it from STOP.
+
+## 4. Why keys work at 2 M but not earlier/later versions of the code path
+
+The CW ii firmware enters STOP between frames with MIE cleared. We mirror the
+reference `Chipset::Tick`: peripherals keep ticking while the core is stopped
+and any pending interrupt resumes it; the actual exception is only taken when
+the (delayed) MIE and the interrupt mask permit it. A key press therefore both
+sets the pending EXI0 bit and, on real-hardware ROMs, is picked up by the
+firmware's KO scan (`KI=0xF040`), which dismisses the splash.
+
+## 5. Remaining gaps
+
+* **`fx9910cw` (2nd edition, `FY-505A`) does not boot.** Tracing its 512 KiB
+  image shows a deliberate software reset around instruction 23 that pops
+  `PC=0x67F6`, `CSR=0xF6` from the reset-vector words at `0x000C/0x000E`.
+  With `csr_mask=0x0F` this becomes code segment 6, which the reference
+  `MMU::ReadCode` explicitly leaves unmapped (`0xFFFF`), so the CPU falls into
+  an EL2 branch-to-self at `0x680C` (`0xCEFF`) and the LCD stays blank. Mapping
+  segment 6 lets it run further but still produces no display. This ROM is
+  not among the `models/` shipped with CasioEmuX, so its exact flash/segment
+  mapping is unknown; it needs a dedicated model descriptor or a different
+  `csr_mask`/remap rule. All other CW ii behaviour in this build is shared
+  with the three working models, so `execution_supported()` stays `true` and
+  this limitation is documented rather than hidden.
+* **BCD coprocessor** is register-only: reads/writes and flag nibbles work, but
+  `RunCommand` and the 32-word macro engine are not implemented. Arithmetic
+  that depends on the coprocessor will be wrong even though boot/menu rendering
+  is fine.
+* **Timing is approximate.** One `tick()` is one CPU instruction and one HSCLK
+  tick; FCON's `ClockDiv`, the real 4 MHz clock ratio, instruction cycle counts
+  and the watchdog/RTC peripherals are not modelled. The battery-level
+  detector (`0xF0D0..0xF0D2`, `PowerSupply.cpp`) **is** modelled: BLDFlag is
+  initialised healthy, writes to `0xF0D1` start a short test that always
+  succeeds, and the solar indicator at `0xF310` reports a panel on fx-991CW /
+  fx-991CN CW only. Without this the firmware displays a dead-battery warning
+  and never leaves the splash screen. LSCLK is
+  approximated as one tick per 256 instructions. SPLASH/screen transitions are
+  therefore instruction-count-accurate only for this build.
+* **Second framebuffer**: `0x89000` is routed to VRAM2 for all CW ii models.
+  CasioEmuX only maps it on `real_hardware == 0` images; real hardware uses the
+  `0xF037` bank switch (which we also implement). Blending is a pixel OR rather
+  than the 30/70 intensity mix.
+* **Status icons** are not decoded from the two status-row bytes; the menu/dot
+  matrix rows are rendered. GUI hit-testing still uses the older key grid;
+  headless key labels use `keys::pc_key`.
+* Emulator-derived CW ii images (mailbox at `0x88E00`, extra 256 bytes at
+  `0x89800`) are not specially supported; our 0x89000 window always maps VRAM2.
+
+## 6. References
+
+* Xyzstk/CasioEmuX (GPL-3.0), fetched from `stable`: `models/fx991cncw/model.lua`,
+  `emulator/src/Chipset/MMU.cpp`, `Chipset.cpp`, `CPU.cpp`, `InterruptSource.cpp`,
+  `Peripheral/*.cpp`, `Data/HardwareId.hpp`.
+* Physics365 `991CN-X-CW-Decompilation` (nX-U8 confirmation, ROM header).
+* Local notes: `docs/MODELS-991CNCW.md`, `docs/MODELS-880BTG.md`.

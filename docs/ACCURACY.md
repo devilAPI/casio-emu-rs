@@ -36,7 +36,7 @@ limitations below.
 ```bash
 git clone https://github.com/Fraserbc/u8_emu ../u8_emu
 
-cd fx991es-rs
+cd casio-emu-rs
 U8EMU_DIR=../u8_emu \
 FX991_ROM=/path/to/fx991es.rom.bin \
 tools/accuracy/run.sh

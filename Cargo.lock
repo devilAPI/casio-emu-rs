@@ -45,6 +45,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
+name = "casio-emu-rs"
+version = "0.1.0"
+dependencies = [
+ "font8x8",
+ "image",
+ "minifb",
+]
+
+[[package]]
+name = "casio-emu-web"
+version = "0.1.0"
+dependencies = [
+ "casio-emu-rs",
+ "console_error_panic_hook",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "cc"
 version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -228,24 +246,6 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
-]
-
-[[package]]
-name = "fx991es-rs"
-version = "0.1.0"
-dependencies = [
- "font8x8",
- "image",
- "minifb",
-]
-
-[[package]]
-name = "fx991es-web"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "fx991es-rs",
- "wasm-bindgen",
 ]
 
 [[package]]

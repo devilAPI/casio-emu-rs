@@ -3,7 +3,7 @@
 
 Environment:
     C_BIN    path to the compiled keyseq_one reference harness
-    R_BIN    path to the Rust fx991es-rs binary
+    R_BIN    path to the Rust casio-emu-rs binary
     ROM      path to fx991es.rom.bin
     C_CWD    directory containing rom.bin for the C harness
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 C_BIN = os.environ.get("C_BIN", str(ROOT.parent / "u8_emu" / "keyseq_one"))
-R_BIN = os.environ.get("R_BIN", str(ROOT / "target" / "release" / "fx991es-rs"))
+R_BIN = os.environ.get("R_BIN", str(ROOT / "target" / "release" / "casio-emu-rs"))
 ROM = os.environ.get("ROM", str(ROOT / "fx991es.rom.bin"))
 C_CWD = os.environ.get("C_CWD", str(ROOT.parent / "u8_emu"))
 STEPS = int(os.environ.get("STEPS", "6000000"))
