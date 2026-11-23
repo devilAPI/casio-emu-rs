@@ -52,6 +52,10 @@ On Windows, use [`fxesdev/RomDumper`](https://github.com/fxesdev/RomDumper).
 See [`docs/ROM.md`](docs/ROM.md) for the full explanation, including why the
 ROM must be dumped from the running emulator.
 
+Obtain the official emulator from CASIO (https://edu.casio.com/) or your
+licensed installer. This project intentionally does not link to third-party
+firmware mirrors.
+
 ### 2. Build and run
 
 ```bash
