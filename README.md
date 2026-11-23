@@ -131,10 +131,17 @@ python3 -m http.server -d web/www 8000
 
 Load your ROM with the file picker. See [`docs/WEB.md`](docs/WEB.md).
 
-A hosted build is available at
-**[devilapi.github.io/casio-emu-rs](https://devilapi.github.io/casio-emu-rs/)**.
-It is rebuilt and deployed from `main` by
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml).
+Hosted WebAssembly builds:
+
+- **Release** (latest `v*` tag):
+  **[devilapi.github.io/casio-emu-rs](https://devilapi.github.io/casio-emu-rs/)**
+- **Dev** (`main` branch):
+  **[devilapi.github.io/casio-emu-rs/dev/](https://devilapi.github.io/casio-emu-rs/dev/)**
+
+Both are built and deployed together by
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml). Pushing a `v*`
+tag updates the release build at `/`; pushing to `main` updates `/dev`. Each
+page has a link to the other build.
 
 ---
 
@@ -270,8 +277,9 @@ FX991_ROM=/path/to/fx991es.rom.bin cargo test --release -- --ignored
 - **CI** (`.github/workflows/ci.yml`) runs on every push and pull request:
   formatting, clippy, tests, release builds on Linux/Windows/macOS, and a
   WebAssembly build.
-- **Pages** (`.github/workflows/pages.yml`) builds the WebAssembly app on every
-  push to `main` and deploys it to GitHub Pages.
+- **Pages** (`.github/workflows/pages.yml`) builds the WebAssembly app from the
+  latest `v*` tag (served at `/`) and from `main` (served at `/dev`), then
+  deploys both to GitHub Pages.
 - **Dev release** (`.github/workflows/dev-release.yml`) runs on every push to
   `main`, builds all artifacts and updates the `dev` prerelease.
 - **Release** (`.github/workflows/release.yml`) runs on `v*` tags and creates

@@ -3,6 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -17,29 +18,107 @@ concurrency:
 
 jobs:
   build:
-    name: Build web app
+    name: Build release + dev sites
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout dev (main)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: src-dev
+
+      - name: Resolve release ref
+        id: release
+        shell: bash
+        working-directory: src-dev
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" = "tag" ] && [ "${REF_NAME#v}" != "$REF_NAME" ]; then
+            ref="$REF_NAME"
+          else
+            ref=$(git ls-remote --tags --refs origin 'refs/tags/v*' \
+              | sed 's#.*refs/tags/##' | sort -V | tail -n 1)
+          fi
+          echo "ref=${ref:-main}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release (${{ steps.release.outputs.ref }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.ref }}
+          path: src-release
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-dev/web -> src-dev/target
+            src-release/web -> src-release/target
 
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-bindgen@0.2.130
 
-      - name: Build web app
-        run: ./web/build.sh
+      - name: Build release and dev sites
+        shell: bash
+        env:
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p site/dev
+
+          echo "::group::Build dev (main)"
+          (cd src-dev && ./web/build.sh)
+          cp -a src-dev/web/www/. site/dev/
+          echo "::endgroup::"
+
+          echo "::group::Build release ($RELEASE_REF)"
+          if [ "$RELEASE_REF" = "main" ]; then
+            echo "No v* tag found - reusing the main build"
+            cp -a src-dev/web/www/. site/
+          else
+            (cd src-release && ./web/build.sh)
+            cp -a src-release/web/www/. site/
+          fi
+          echo "::endgroup::"
+
+          echo "Release: $RELEASE_REF  |  Dev: main"
+          find site -maxdepth 2 -type f | sort | head -30
+
+      - name: Add build switcher
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          pages = [
+              (Path("site/index.html"), "dev/", "Dev build (main)"),
+              (Path("site/dev/index.html"), "../", "Release build"),
+          ]
+          style = (
+              "position:fixed;top:10px;right:12px;z-index:10;"
+              "background:#2f2832e6;color:#eae2d8;padding:6px 10px;"
+              "border:1px solid #b7ac9d;border-radius:999px;"
+              "font:12px system-ui,sans-serif;text-decoration:none"
+          )
+          for path, href, label in pages:
+              html = path.read_text()
+              nav = f'<a style="{style}" href="{href}">{label}</a>'
+              anchor = "</main>" if "</main>" in html else "</body>"
+              html = html.replace(anchor, f"  {nav}\n  {anchor}", 1)
+              path.write_text(html)
+          PY
 
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web/www
+          path: site
 
   deploy:
     name: Deploy

@@ -45,8 +45,19 @@ which is useful for screenshots.
 ## Deploy
 
 The generated `web/www` directory is a static site. Publish it with GitHub
-Pages, Netlify, Cloudflare Pages, or any static host. The repository's
-release workflow attaches a `casio-emu-web.zip` artifact containing:
+Pages, Netlify, Cloudflare Pages, or any static host. This repository's
+[`pages.yml`](../.github/workflows/pages.yml) workflow builds two copies and
+deploys them as one site:
+
+| Path | Source | Updated by |
+|---|---|---|
+| `/` | latest `v*` release tag | pushing a `v*` tag |
+| `/dev` | `main` branch | pushing to `main` |
+
+Each page includes a small link to the other build. Pushing to `main` rebuilds
+both paths so the release view stays in sync with the newest tag.
+
+The release workflow attaches a `casio-emu-web.zip` artifact containing:
 
 - `index.html`
 - `main.js`
