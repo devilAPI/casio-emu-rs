@@ -24,11 +24,11 @@ jobs:
             target: x86_64-pc-windows-msvc
             archive: fx991es-rs-windows-x86_64.zip
           - name: macos-x86_64
-            os: macos-14
+            os: macos-latest
             target: x86_64-apple-darwin
             archive: fx991es-rs-macos-x86_64.tar.gz
           - name: macos-aarch64
-            os: macos-14
+            os: macos-latest
             target: aarch64-apple-darwin
             archive: fx991es-rs-macos-aarch64.tar.gz
     runs-on: ${{ matrix.os }}
