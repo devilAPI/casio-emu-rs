@@ -133,6 +133,12 @@ firmware's KO scan (`KI=0xF040`), which dismisses the splash.
   divide and shifts, ported from CasioEmuX `BCDCalc.cpp`. A command queued
   behind a running macro stalls the CPU until it is accepted. Before this was
   added every calculation on CW ii ROMs returned 0.
+  **Known issue:** +, -, x, / and fractions are correct (`3+3.3` = 63/10,
+  `123x456` = 56088, `100/7`), but results that go through the transcendental
+  series are still wrong on `fx991cncw` (`2^4` shows 6, `2^10` shows 52,
+  `sin(30)` in radians shows 0.0605 instead of -0.988). Running the macro
+  engine faster does not change this, so the cause is elsewhere (macro/command
+  semantics or another unmodelled peripheral).
 * **fx-810 DE CW** boots to its home menu but does not react to keys: the
   firmware leaves KO undriven and the input filter (`0xF042`) at 0 before STOP,
   so the one-shot keyboard interrupt this emulator raises is discarded when the
