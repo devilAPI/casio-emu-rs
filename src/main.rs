@@ -14,11 +14,9 @@ fn main() {
     let mut rom_explicit = false;
     let mut ram_path: Option<PathBuf> = None;
     let mut model_id: Option<String> = None;
-    let mut skin_path: Option<PathBuf> = None;
     let mut headless: Option<u64> = None;
     let mut dump_path: Option<PathBuf> = None;
     let mut key_script: Vec<String> = Vec::new();
-    let mut zoom: usize = 1;
     let mut trace_steps: Option<u64> = None;
     let mut trace_hash_steps: Option<u64> = None;
     let mut presses: Vec<(u64, String)> = Vec::new();
@@ -46,18 +44,6 @@ fn main() {
                     println!("  {:<16} {}", m.id, m.name);
                 }
                 return;
-            }
-            "--skin" => {
-                i += 1;
-                skin_path = Some(PathBuf::from(args.get(i).expect("--skin needs a path")));
-            }
-            "--zoom" => {
-                i += 1;
-                zoom = args
-                    .get(i)
-                    .expect("--zoom needs a factor")
-                    .parse()
-                    .expect("invalid zoom factor");
             }
             "--headless" => {
                 i += 1;
@@ -225,7 +211,7 @@ fn main() {
             ram,
         );
     } else {
-        gui::run_gui(rom, model, skin_path, ram, zoom);
+        gui::run_gui(rom, model, ram);
     }
 }
 
@@ -326,14 +312,14 @@ fn run_headless(
     cpu.reset(&mut machine);
 
     let key_at =
-        |n: usize| -> Option<(u8, u8)> { script.get(n).and_then(|s| keys::pc_key(s.as_str())) };
+        |n: usize| -> Option<(u8, u8)> { script.get(n).and_then(|s| keys::lookup(model.keys, s.as_str())) };
 
     let mut held = false;
     let mut key_index = 0usize;
     for step in 0..steps {
         for (at, label) in presses {
             if *at == step {
-                if let Some((ki, ko)) = keys::pc_key(label) {
+                if let Some((ki, ko)) = keys::lookup(model.keys, label) {
                     machine.press(ki, ko);
                 }
             }
@@ -407,8 +393,6 @@ fn print_help() {
             .join(", ")
     );
     println!("    --list-models    list supported models and exit");
-    println!("    --skin PATH      device image (default: assets/skin.png)");
-    println!("    --zoom N         window zoom factor 1-8 (default: 1)");
     println!("    --trace-hash N   run N instructions and print a rolling state hash");
     println!("    --headless N     run N instructions and print the LCD, no window");
     println!("    --press N:KEY    press KEY at instruction N (repeatable)");

@@ -50,7 +50,7 @@ explicit `--model ID`.
 | `fx991cnx` | fx-991CN X (CY-239) | 256 KiB | ClassWiz | boots; LCD and keys working |
 | `fx991cnx-emu` | fx-991CN X (emulator ROM) | 256 KiB | ClassWiz | descriptor (mailbox out of range) |
 | `fx991cw` | fx-991CW (EY-005A) | 512 KiB | ClassWiz II | boots; LCD and keys working |
-| `fx9910cw` | fx-9910CW 2nd ed. (FY-505A) | 512 KiB | ClassWiz II | loads; boot stuck (unmapped segment 6) |
+| `fx9910cw` | fx-9910CW 2nd ed. (FY-505A) | 512 KiB | ClassWiz II | loads; dump fails model/integrity checks |
 | `fx991cncw` | fx-991CN CW | 1 MiB | ClassWiz II | boots; LCD and keys working |
 | `fx880btg` | fx-880BTG (EY-023B) | 1 MiB | ClassWiz II | boots; LCD and keys working |
 
@@ -94,6 +94,9 @@ The signature identifies the firmware; several models share one ROM image.
 - [`MODELS-991CNCW.md`](MODELS-991CNCW.md) — ClassWiz II chip identification.
 - [`MODELS-880BTG.md`](MODELS-880BTG.md) — fx-880BTG identification and parameters.
 - [`MODELS-FX580VNX.md`](MODELS-FX580VNX.md) — fx-580VN X archive analysis and `--ram` option.
+- [`MODELS-ESPLUS-FAMILY.md`](MODELS-ESPLUS-FAMILY.md) — 128 KiB ES PLUS / 2nd-edition models.
+- [`MODELS-CWX-FAMILY.md`](MODELS-CWX-FAMILY.md) — 256 KiB ClassWiz X models.
+- [`MODELS-CW2-FAMILY.md`](MODELS-CW2-FAMILY.md) — 512 KiB / 1 MiB ClassWiz II models.
 - [`FIX-ESPLUS.md`](FIX-ESPLUS.md) — real-hardware keyboard/timer interrupt fix and validation.
 - [`FIX-CW2.md`](FIX-CW2.md) — CW ii board (memory map, dual VRAM, IRQ/timer).
 - [`FIX-CLASSWIZ.md`](FIX-CLASSWIZ.md) — ClassWiz code window, peripherals and LCD.
@@ -101,7 +104,7 @@ The signature identifies the firmware; several models share one ROM image.
 
 ## Known gaps
 
-`fx9910cw` and `fx991dex-vere` load but do not reach a usable LCD (different
+`fx991dex-vere` loads but does not reach a usable LCD (different
 firmware revisions; see the fix notes).  CW ii's BCD coprocessor is
 register-only (`RunCommand` and the macro engine are not implemented), status
 icons are not decoded, and timer/LSCLK timing is approximate.  The ES PLUS

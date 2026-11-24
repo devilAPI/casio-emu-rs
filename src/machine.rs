@@ -1174,9 +1174,17 @@ impl Machine {
     /// matrix.  The four high bits of each byte are used as pixel columns;
     /// ClassWiz VRAM rows are 32 bytes wide but only 24 are displayed.
     pub fn render(&self) -> Vec<u8> {
+        let mut out = vec![0u8; self.model.lcd_width * self.model.lcd_height];
+        self.render_into(&mut out);
+        out
+    }
+
+    /// Render the LCD into a caller-provided buffer, avoiding a per-frame
+    /// allocation.  `out` must be `lcd_width * lcd_height` bytes.
+    pub fn render_into(&self, out: &mut [u8]) {
+        out.fill(0);
         let width = self.model.lcd_width;
         let height = self.model.lcd_height;
-        let mut out = vec![0u8; width * height];
         let (stride, disp) = self.vram_geometry();
         if self.model.board == BoardKind::ClassWizII {
             // The two framebuffers are blended on real hardware (~30/70).  For
@@ -1191,7 +1199,7 @@ impl Machine {
                     }
                 }
             }
-            return out;
+            return;
         }
         if self.has_classwiz_peripherals() {
             // The reference `Screen::Frame()` only draws for modes 4, 5 and 6,
@@ -1200,7 +1208,7 @@ impl Machine {
             // regardless of the mode register.
             let mode = self.sfr_byte(model::SCREEN_MODE) & 0x07;
             if mode != 5 {
-                return out;
+                return;
             }
         }
         let vram = (self.model.vram_base - model::SFR_BASE as u16) as usize;
@@ -1213,7 +1221,6 @@ impl Machine {
                 }
             }
         }
-        out
     }
 }
 

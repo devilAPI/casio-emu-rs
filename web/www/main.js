@@ -178,22 +178,72 @@ function hitKey(x, y) {
   return keyTable.find((k) => gx >= k.x0 && gx <= k.x1 && gy >= k.y0 && gy <= k.y1) || null;
 }
 
-canvas.addEventListener('pointerdown', (e) => {
-  if (!emu) return;
+let activePointer = null;
+let releaseTimer = null;
+
+function pointerPoint(e) {
   const rect = canvas.getBoundingClientRect();
   // Map directly into design coordinates regardless of CSS size or DPR.
-  const x = (e.clientX - rect.left) * DESIGN.w / rect.width;
-  const y = (e.clientY - rect.top) * DESIGN.h / rect.height;
+  return {
+    x: (e.clientX - rect.left) * DESIGN.w / rect.width,
+    y: (e.clientY - rect.top) * DESIGN.h / rect.height,
+  };
+}
+
+function releaseKey() {
+  if (releaseTimer !== null) {
+    clearTimeout(releaseTimer);
+    releaseTimer = null;
+  }
+  if (emu) emu.release();
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (!emu) return;
+  if (activePointer !== null && activePointer !== e.pointerId) return;
+  activePointer = e.pointerId;
+  if (canvas.setPointerCapture) {
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  }
+  const { x, y } = pointerPoint(e);
   const key = hitKey(x, y);
   if (!key) return;
   if (key.label === 'ON') {
     emu.reset();
   } else if (key.ki !== 0 || key.ko !== 0) {
     emu.press(key.ki, key.ko);
-    // Release after the firmware has had a chance to scan the latch.
-    setTimeout(() => { if (emu) emu.release(); }, 120);
+    // Release after the firmware has had a chance to scan the latch.  The
+    // emulation loop is time-budgeted, so this delay is wall-clock accurate
+    // even on slower machines.
+    if (releaseTimer !== null) clearTimeout(releaseTimer);
+    releaseTimer = setTimeout(releaseKey, 120);
   }
-});
+}, { passive: false });
+
+function endPointer(e) {
+  if (activePointer !== null && e.pointerId !== activePointer) return;
+  activePointer = null;
+  // Do not release immediately: the scheduled hold lets the firmware matrix
+  // scan see short taps.  A long hold has already been released by the timer.
+  if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+    canvas.releasePointerCapture(e.pointerId);
+  }
+}
+
+function cancelPointer(e) {
+  if (activePointer !== null && e.pointerId !== activePointer) return;
+  activePointer = null;
+  releaseKey();
+  if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+    canvas.releasePointerCapture(e.pointerId);
+  }
+}
+
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', cancelPointer);
+window.addEventListener('pointerup', endPointer);
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 function drawLcd(lcd) {
   ctx.fillStyle = COLORS.lcdBg;
@@ -268,7 +318,15 @@ function draw() {
 
 function frame() {
   if (emu) {
-    emu.step(120000);
+    // Time-budget the emulation so pointer/keyboard events are handled every
+    // frame even on slower machines.  Wasm calls are batched to reduce
+    // boundary overhead.
+    const deadline = performance.now() + 6;
+    let batches = 0;
+    do {
+      emu.step(2000);
+      batches++;
+    } while (performance.now() < deadline && batches < 64);
   }
   draw();
   requestAnimationFrame(frame);

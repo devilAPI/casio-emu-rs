@@ -126,8 +126,7 @@ Other SFRs from the reference emulator that this core does not implement:
   WDOWN, arrows, PAUSE, SUN), so it is **not** pixel-accurate.
 - The ClassWiz "larger font" is drawn by firmware glyphs in ROM; this
   emulator only supplies the dot-matrix framebuffer.  A ClassWiz device skin
-  is not bundled.  If an ES PLUS skin is supplied with `--model fx570vnx`,
-  its LCD/keypad rectangles are still the ES PLUS ones.
+  is not bundled, and the desktop frontend draws the key matrix directly.
 - Keyboard ghosting (multiple simultaneous keys) and the KO mask/resistor
   model-ID behaviour are simplified: only one held key is tracked and the
   KI line is gated by `ko_drive & ~ko_mask`.

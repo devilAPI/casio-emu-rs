@@ -68,7 +68,12 @@ It intentionally does **not** contain a ROM or the CASIO device artwork.
 
 ## Notes
 
-- The web UI supports keyboard input and clicking the drawn device keys.
+- The web UI supports keyboard input, mouse clicks and touch taps on the drawn
+  device keys. Pointer capture keeps a press active until the finger or mouse
+  is released, and a short hold lets the firmware's matrix scan see the key.
+- Emulation is time-budgeted per animation frame (roughly 6 ms), so the page
+  remains responsive on slower devices instead of blocking on a fixed
+  instruction count.
 - The browser must serve the page over HTTP(S); WASM cannot be loaded from a
   `file://` URL in most browsers.
 - The page falls back to a plain LCD if `skin.png` is missing.

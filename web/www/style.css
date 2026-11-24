@@ -101,7 +101,10 @@ canvas {
     0 26px 70px var(--shadow),
     0 0 0 1px rgba(234, 226, 216, 0.05);
   image-rendering: pixelated;
-  touch-action: manipulation;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .controls {

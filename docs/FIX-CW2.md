@@ -151,6 +151,49 @@ firmware's KO scan (`KI=0xF040`), which dismisses the splash.
 * Emulator-derived CW ii images (mailbox at `0x88E00`, extra 256 bytes at
   `0x89800`) are not specially supported; our 0x89000 window always maps VRAM2.
 
+## 5b. fx-9910CW — dump is unusable (definitive)
+
+`roms/fx9910cw.rom.bin` (FY-505A, 512 KiB, SHA-256
+`e238c34f6023fcac167cab0482bf5eb2223ac4ba54bff958ee5733cccb9eb887`) cannot be
+booted by any emulation change: **two of its flash banks contain no data at
+all**.
+
+Traced boot path with the unmodified dump:
+
+| step | PC | event |
+|---|---|---|
+| 0 | `0x680A` | reset vector |
+| 1–17 | `0x680E…0x685C` | table-copy loop reads an 8-byte config entry at data `4:0B8A0` (ROM `0x4B8A0`) — all eight bytes are `00`, end marker `FF FF` at `0x4B8A8`; result `R6=0`, `R7=0` |
+| 18 | `0xB5E2` | `CMP R6,#2` fails (`R6=0`) → `0xB576` |
+| 26 | `0xB576` | `CMP R7,#1` fails (`R7=0`) → `0xB5A4` → `B 0:822A` → BRK → EL2 vector `0x680C` → `BC AL,self` |
+
+With a temporary diagnostic ROM that supplied `R6=2, R7=1`, boot proceeds to
+`0xB57E`: `BL 1:08F0A` — a far call into code segment 1, i.e. ROM `0x18F0A`.
+Bank 1 (`0x10000–0x1FFFF`) is **65,536 consecutive zero bytes**, so the CPU
+executes NOPs forever; after 5 M steps it is still marching through the empty
+bank with 0 lit pixels.
+
+Per-bank nonzero byte counts prove the dump is incomplete:
+
+| bank | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| fx9910cw | 55,336 | **0** | **0** | 60,004 | 54,124 | 15 | 0 | 8,189 |
+
+Working CW ii dumps (fx991cw, fx810decw, fx880btg, fxjp700cw, fx82decw) have
+~60 K nonzero bytes in banks 1 and 2. `fx810decw` has the identical boot
+structure and contains valid code at `0x18F0A`; this dump does not. It also
+lacks the `71CASGaYqgys` security ID + password at `0xFDE0` that every other
+CW ii ROM has, and its stored checksum field is `0xF8D4` (not `0x8113`, which
+belongs to fx-880BTG).
+
+**Conclusion:** this is a failed flash read, not a model the emulator can
+support as-is. No semantic emulation change was kept: a diagnostic experiment
+masking DSR to `0x1F` (as CasioEmuX does) left all CW ii models' LCD output
+unchanged and was reverted to avoid regressions. A complete, verified 512 KiB
+FY-505A dump — with real data in banks 1/2, valid code at `0x18F0A`, the
+security ID at `0xFDE0`, and a matching checksum — is required. Re-dump the
+calculator with DTU8 and verify bank-1/2 nonzero counts first.
+
 ## 6. References
 
 * Xyzstk/CasioEmuX (GPL-3.0), fetched from `stable`: `models/fx991cncw/model.lua`,

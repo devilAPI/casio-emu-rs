@@ -1,0 +1,58 @@
+/// ClassWiz II (fx-991CN CW / fx-991CW / fx-82DE CW / ...) keypad, generated
+/// from the reference `fx991cncw/model.lua`.  Codes there are `KO<<4 | KI`
+/// (`ki = 1 << (code & 0xF)`, `ko = 1 << (code >> 4)`).  This matrix differs
+/// from the ClassWiz (VN X) one: the d-pad, the top rows and the scroll rocker
+/// sit on different KI/KO lines.  Grid units are skin pixels relative to the
+/// top-left corner of the ON key.
+pub const CW2_GRID_W: u16 = 224;
+pub const CW2_GRID_H: u16 = 339;
+pub const CW2_KEYS: &[CalcKey] = &[
+    CalcKey { label: "7", ki: 0x04, ko: 0x01, x0: 0, y0: 184, x1: 32, y1: 216 },
+    CalcKey { label: "8", ki: 0x04, ko: 0x02, x0: 48, y0: 184, x1: 80, y1: 216 },
+    CalcKey { label: "9", ki: 0x04, ko: 0x04, x0: 96, y0: 184, x1: 128, y1: 216 },
+    CalcKey { label: "DEL", ki: 0x04, ko: 0x08, x0: 144, y0: 184, x1: 176, y1: 216 },
+    CalcKey { label: "AC", ki: 0x04, ko: 0x10, x0: 192, y0: 184, x1: 224, y1: 216 },
+    CalcKey { label: "4", ki: 0x02, ko: 0x01, x0: 0, y0: 225, x1: 32, y1: 257 },
+    CalcKey { label: "5", ki: 0x02, ko: 0x02, x0: 48, y0: 225, x1: 80, y1: 257 },
+    CalcKey { label: "6", ki: 0x02, ko: 0x04, x0: 96, y0: 225, x1: 128, y1: 257 },
+    CalcKey { label: "X", ki: 0x02, ko: 0x08, x0: 144, y0: 225, x1: 176, y1: 257 },
+    CalcKey { label: "/", ki: 0x02, ko: 0x10, x0: 192, y0: 225, x1: 224, y1: 257 },
+    CalcKey { label: "1", ki: 0x01, ko: 0x01, x0: 0, y0: 266, x1: 32, y1: 298 },
+    CalcKey { label: "2", ki: 0x01, ko: 0x02, x0: 48, y0: 266, x1: 80, y1: 298 },
+    CalcKey { label: "3", ki: 0x01, ko: 0x04, x0: 96, y0: 266, x1: 128, y1: 298 },
+    CalcKey { label: "+", ki: 0x01, ko: 0x08, x0: 144, y0: 266, x1: 176, y1: 298 },
+    CalcKey { label: "-", ki: 0x01, ko: 0x10, x0: 192, y0: 266, x1: 224, y1: 298 },
+    CalcKey { label: "0", ki: 0x10, ko: 0x40, x0: 0, y0: 307, x1: 32, y1: 339 },
+    CalcKey { label: ".", ki: 0x08, ko: 0x40, x0: 48, y0: 307, x1: 80, y1: 339 },
+    CalcKey { label: "x10", ki: 0x04, ko: 0x40, x0: 96, y0: 307, x1: 128, y1: 339 },
+    CalcKey { label: "Ans", ki: 0x02, ko: 0x40, x0: 144, y0: 307, x1: 176, y1: 339 },
+    CalcKey { label: "EXE", ki: 0x01, ko: 0x40, x0: 192, y0: 307, x1: 224, y1: 339 },
+    CalcKey { label: "x", ki: 0x10, ko: 0x01, x0: 2, y0: 114, x1: 27, y1: 139 },
+    CalcKey { label: "a/b", ki: 0x10, ko: 0x02, x0: 41, y0: 114, x1: 66, y1: 139 },
+    CalcKey { label: "sqrt", ki: 0x10, ko: 0x04, x0: 80, y0: 114, x1: 105, y1: 139 },
+    CalcKey { label: "xn", ki: 0x10, ko: 0x08, x0: 119, y0: 114, x1: 144, y1: 139 },
+    CalcKey { label: "x2", ki: 0x10, ko: 0x10, x0: 158, y0: 114, x1: 183, y1: 139 },
+    CalcKey { label: "logx", ki: 0x10, ko: 0x20, x0: 197, y0: 114, x1: 222, y1: 139 },
+    CalcKey { label: "(-)", ki: 0x08, ko: 0x01, x0: 2, y0: 148, x1: 27, y1: 173 },
+    CalcKey { label: "sin", ki: 0x08, ko: 0x02, x0: 41, y0: 148, x1: 66, y1: 173 },
+    CalcKey { label: "cos", ki: 0x08, ko: 0x04, x0: 80, y0: 148, x1: 105, y1: 173 },
+    CalcKey { label: "tan", ki: 0x08, ko: 0x08, x0: 119, y0: 148, x1: 144, y1: 173 },
+    CalcKey { label: "(", ki: 0x08, ko: 0x10, x0: 158, y0: 148, x1: 183, y1: 173 },
+    CalcKey { label: ")", ki: 0x08, ko: 0x20, x0: 197, y0: 148, x1: 222, y1: 173 },
+    CalcKey { label: "SETUP", ki: 0x40, ko: 0x01, x0: 2, y0: 37, x1: 27, y1: 62 },
+    CalcKey { label: "BACK", ki: 0x40, ko: 0x02, x0: 41, y0: 37, x1: 66, y1: 62 },
+    CalcKey { label: "LEFT", ki: 0x40, ko: 0x04, x0: 80, y0: 37, x1: 105, y1: 62 },
+    CalcKey { label: "OK", ki: 0x40, ko: 0x08, x0: 119, y0: 37, x1: 144, y1: 62 },
+    CalcKey { label: "RIGHT", ki: 0x40, ko: 0x10, x0: 158, y0: 37, x1: 183, y1: 62 },
+    CalcKey { label: "PGDN", ki: 0x40, ko: 0x20, x0: 197, y0: 37, x1: 222, y1: 62 },
+    CalcKey { label: "SHIFT", ki: 0x20, ko: 0x01, x0: 2, y0: 78, x1: 27, y1: 103 },
+    CalcKey { label: "VARS", ki: 0x20, ko: 0x02, x0: 42, y0: 78, x1: 67, y1: 103 },
+    CalcKey { label: "FUNC", ki: 0x20, ko: 0x04, x0: 82, y0: 78, x1: 107, y1: 103 },
+    CalcKey { label: "CATLG", ki: 0x20, ko: 0x10, x0: 158, y0: 78, x1: 183, y1: 103 },
+    CalcKey { label: "TOOLS", ki: 0x20, ko: 0x20, x0: 198, y0: 78, x1: 223, y1: 103 },
+    CalcKey { label: "DOWN", ki: 0x20, ko: 0x08, x0: 120, y0: 72, x1: 144, y1: 96 },
+    CalcKey { label: "HOME", ki: 0x80, ko: 0x02, x0: 41, y0: 1, x1: 66, y1: 26 },
+    CalcKey { label: "UP", ki: 0x80, ko: 0x08, x0: 119, y0: 1, x1: 144, y1: 26 },
+    CalcKey { label: "PGUP", ki: 0x80, ko: 0x20, x0: 197, y0: 1, x1: 222, y1: 26 },
+    CalcKey { label: "ON", ki: 0x00, ko: 0x00, x0: 4, y0: 0, x1: 26, y1: 22 },
+];

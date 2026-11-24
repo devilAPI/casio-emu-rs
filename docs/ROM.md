@@ -75,8 +75,8 @@ python3 tools/extract_skin.py \
 ```
 
 This writes `assets/skin.bmp` and `assets/skin.png`, and copies them to
-`web/www/` if that directory exists. The desktop binary loads
-`assets/skin.png` automatically; use `--skin PATH` to override it.
+`web/www/` if that directory exists. The web build uses `skin.png`; the
+desktop frontend uses its built-in reflowing UI instead.
 
 `tools/extract_all.sh` runs both extractors:
 

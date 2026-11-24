@@ -11,7 +11,7 @@ python3 tools/extract_skin.py --dll /path/to/fxESPLUS_P16.dll
 ```
 
 This writes `assets/skin.png` and `assets/skin.bmp`, and copies them into
-`web/www/` for the browser build. The desktop frontend loads `assets/skin.png`
-automatically and falls back to its built-in drawn keypad if it is absent.
+`web/www/` for the browser build. The desktop frontend uses its built-in
+reflowing UI and does not load the skin.
 
 `skin.png` and `skin.bmp` are intentionally ignored by git.

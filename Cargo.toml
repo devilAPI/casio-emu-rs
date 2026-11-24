@@ -20,12 +20,12 @@ required-features = ["desktop"]
 
 [features]
 default = ["desktop"]
-desktop = ["dep:minifb", "dep:font8x8", "dep:image"]
+desktop = ["dep:winit", "dep:softbuffer", "dep:font8x8"]
 
 [dependencies]
-minifb = { version = "0.28", optional = true }
+winit = { version = "0.30", optional = true }
+softbuffer = { version = "0.4", optional = true }
 font8x8 = { version = "0.3", optional = true }
-image = { version = "0.25", optional = true, default-features = false, features = ["bmp", "png"] }
 
 [profile.release]
 opt-level = 3

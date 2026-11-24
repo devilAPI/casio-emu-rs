@@ -93,8 +93,9 @@ project. There is no ROM or RAM payload in `config.bin`.
 an empty LCD; it also shows the status icons referenced by the `rsd_*`
 bindings above. It is the source emulator's skin, not the ES PLUS skin that
 this project extracts via `tools/extract_skin.py`, and it is **not bundled**
-here. It can be passed to the desktop binary with `--skin PATH`, but the
-LCD and key hitboxes remain those compiled into `src/keys.rs` / `src/model.rs`.
+here. It is not used by the desktop app (which draws a built-in reflowing
+UI); its LCD and key hitboxes remain those compiled into `src/keys.rs` /
+`src/model.rs`.
 
 ## Loading the RAM snapshot
 

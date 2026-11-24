@@ -481,6 +481,7 @@ pub const KEYS: &[CalcKey] = &[
 ];
 
 include!("vnx_keys.inc");
+include!("cw2_keys.inc");
 
 /// Keyboard mapping used by the desktop frontend.
 pub fn pc_key(label: &str) -> Option<(u8, u8)> {
@@ -537,4 +538,30 @@ pub fn pc_key(label: &str) -> Option<(u8, u8)> {
         "logx" => (0x40, 0x20),
         _ => return None,
     })
+}
+
+/// Resolve a PC key label to a KI/KO pair for the given keypad.  The on-screen
+/// keypad of the model is searched first (so each board's own matrix is
+/// honoured, e.g. ClassWiz II); `pc_key` is the fallback for labels the
+/// keypad does not print.
+pub fn lookup(keys: &[CalcKey], label: &str) -> Option<(u8, u8)> {
+    let find = |l: &str| {
+        keys.iter()
+            .find(|k| k.label == l && (k.ki != 0 || k.ko != 0))
+            .map(|k| (k.ki, k.ko))
+    };
+    if let Some(v) = find(label) {
+        return Some(v);
+    }
+    if matches!(label, "Return" | "EXE" | "=") {
+        if let Some(v) = find("EXE").or_else(|| find("=")) {
+            return Some(v);
+        }
+    }
+    if label == "SPACE" {
+        if let Some(v) = find("AC") {
+            return Some(v);
+        }
+    }
+    pc_key(label)
 }

@@ -10,15 +10,18 @@ A cross-platform emulator for Casio nX-U8/100 calculators, written in Rust.
 It runs original firmware on a Rust nX-U8/100 core, renders the real 96×32
 (ES PLUS) and 192×64 (ClassWiz) LCDs, and works as:
 
-- a native desktop app on **Linux, macOS and Windows** (`minifb`)
+- a native desktop app on **Linux, macOS and Windows** (`winit` + `softbuffer`)
 - a **WebAssembly** app in the browser (canvas + wasm-bindgen)
 - a headless CLI for tests and automated accuracy checks
 
-![casio-emu-rs fallback UI with 123 on the LCD](docs/screenshot.png)
+| fx-991ES PLUS C | fx-991CN CW (ClassWiz II) |
+|---|---|
+| ![fx-991ES PLUS C with 123 on the LCD](docs/screenshot.png) | ![fx-991CN CW home menu](docs/screenshot-cw2.png) |
 
-> The screenshot shows the built-in fallback UI. If you extract the optional
-> device image from your own copy of the official emulator, both the desktop
-> and web frontends draw the real calculator skin as the background.
+> The screenshot shows the built-in fallback UI. The web frontend can draw the
+> real calculator skin if you extract the optional device image from your own
+> copy of the official emulator. The desktop app uses the built-in vector UI so
+> it can reflow to any window size and support touch input.
 
 ---
 
@@ -31,8 +34,9 @@ It runs original firmware on a Rust nX-U8/100 core, renders the real 96×32
 | **Real firmware** | Runs original Casio ROM dumps unmodified |
 | **Real LCD** | 96×32 and 192×64 framebuffers with the correct VRAM packing |
 | **Full key matrix** | 49 keys, shift/alpha, arrows, mode, DEL/AC, all functions |
-| **Scalable windows** | Desktop window resizes smoothly; web canvas is responsive |
-| **Device skin** | Optional official `3000.bmp` / `3001.bmp` artwork |
+| **Responsive UI** | Reflows on resize with no letterbox bars; LCD dots and text use whole-number scales, so nothing stretches |
+| **Touch + mouse** | On-screen keys work with a touchscreen, trackpad, mouse, or keyboard |
+| **Device skin (web)** | Optional official `3000.bmp` / `3001.bmp` artwork in the browser build |
 | **WebAssembly** | Same Rust core in the browser, no server-side emulation |
 | **Headless mode** | Run N instructions, press keys, dump the LCD as PBM |
 | **Reproducible accuracy** | C reference harness and Python sweep included |
@@ -86,6 +90,13 @@ is loaded automatically. F6/F7 cycle models directly, Esc closes the list
 when pressed; the active model name is shown above the keys. The web app has a
 styled model dropdown next to the ROM loader.
 
+The keypad stretches on both axes to fill the space under the screen (always a
+little narrower than the screen), keys grow into the gaps around them, and all
+labels share one text size. Every board uses its own key matrix: ES PLUS,
+ClassWiz (VN X) and ClassWiz II each have a separate table, and PC keyboard
+input is resolved through the active model's keypad, so the arrow keys press
+the right physical keys on every model.
+
 | id | model | board | status |
 |---|---|---|---|
 | `fx991es-plus-c` | fx-991ES PLUS C | ES PLUS | fully emulated and validated |
@@ -101,7 +112,7 @@ styled model dropdown next to the ROM loader.
 | `fx991cnx` | fx-991CN X (CY-239) | ClassWiz | boots; LCD and keys working |
 | `fx991cnx-emu` | fx-991CN X (emulator ROM) | ClassWiz | descriptor (mailbox out of range) |
 | `fx991cw` | fx-991CW (EY-005A, 512 KiB) | ClassWiz II | boots; LCD and keys working |
-| `fx9910cw` | fx-9910CW 2nd ed. (FY-505A, 512 KiB) | ClassWiz II | loads; boot stuck (unmapped segment 6) |
+| `fx9910cw` | fx-9910CW 2nd ed. (FY-505A, 512 KiB) | ClassWiz II | loads; dump fails firmware model/integrity checks |
 | `fx991cncw` | fx-991CN CW (1 MiB) | ClassWiz II | boots; LCD and keys working |
 | `fx880btg` | fx-880BTG (EY-023B, 1 MiB) | ClassWiz II | boots; LCD and keys working |
 
@@ -192,20 +203,17 @@ U8EMU_DIR=../u8_emu FX991_ROM=/path/to/fx991es.rom.bin tools/accuracy/run.sh
 | `F1`–`F4` | MODE / SHIFT / ALPHA / ON |
 | `F5` | √ |
 
-The on-screen keys are clickable. The **ON** button resets the CPU.
+The on-screen keys are clickable and work with touchscreens. The **ON** button
+resets the CPU.
 
-### Scalable windows
+### Responsive windows and touch
 
-The desktop window opens at the active model's natural size and is freely
-resizable. The device image, LCD, keypad and hitboxes are all scaled together
-with nearest-neighbour sampling, and each LCD dot and key cell uses the same
-scale on both axes, so nothing is stretched or clipped and the UI stays crisp.
-On high-density displays, pass `--zoom 2` (or `3`/`4`) to open at a whole-number
-multiple without any resampling.
-
-The web canvas derives its width from both the viewport width and a height
-budget, so the 289:582 device artwork keeps its aspect ratio on narrow phones
-instead of being squashed, and it renders at the display's device-pixel ratio.
+The desktop layout is computed in window pixels and reflows as the window is
+resized. The LCD is drawn at the largest whole-number dot scale that fits, and
+all labels/help text use whole-number multiples of the 8×8 font — so the LCD
+and text are never stretched and there are no black letterbox bars. Extra space
+is filled by the tinted body. Touch events from winit press the same on-screen
+keys as mouse clicks.
 
 ### Headless mode
 
@@ -240,7 +248,7 @@ src/
   model.rs      per-calculator descriptors and ROM auto-detection
   machine.rs    ROM/RAM/SFR/VRAM, keyboard interfaces, LCD render
   keys.rs       49-key fx-991ES PLUS C matrix + desktop mapping
-  gui.rs        minifb frontend, skin loading, resizable canvas
+  gui.rs        winit frontend: reflowing layout, touch/mouse/keyboard, LCD
   main.rs       CLI, headless/trace runners
 web/
   src/lib.rs    wasm-bindgen bindings
@@ -295,7 +303,25 @@ are **not** covered by this license. CASIO and fx-991ES are trademarks of
 CASIO COMPUTER CO., LTD. This project is not affiliated with or endorsed by
 CASIO.
 
-The CPU semantics and decode table are a Rust port of
-[`Fraserbc/u8_emu`](https://github.com/Fraserbc/u8_emu) (GPL-3.0). Thanks also
-to the nX-U8/100 community, `LifeEmu/SimU8`, `fxesdev`, `user202729`, `Xyzstk`
-and everyone who documented the Casio platform.
+## Thank you
+
+This emulator stands on the shoulders of the people who reverse-engineered
+and documented the Casio nX-U8/100 platform. Roughly a third of the code is
+ported or derived from their open-source work; the rest (machine/board glue,
+GUI, CLI, web front end) is original.
+
+| Project / people | What it gave us |
+|---|---|
+| [`Fraserbc/u8_emu`](https://github.com/Fraserbc/u8_emu) (Fraser Price and contributors, GPL-3.0) | The CPU core. `src/cpu.rs` is a Rust port of its instruction semantics and `src/table.rs` is generated from its decode table. It is also the reference we validate against (see [Accuracy](#accuracy)). |
+| [`user202729/CasioEmu`](https://github.com/user202729/CasioEmu) and [`user202729/fxesplus`](https://github.com/user202729/fxesplus) | ClassWiz memory map, code-segment behaviour, key matrices and the `model.lua` descriptions we cross-checked every model against. |
+| [`Xyzstk/CasioEmuX`](https://github.com/Xyzstk/CasioEmuX) and [`fxesdev/CasioEmuX`](https://github.com/fxesdev/CasioEmuX) | ClassWiz II (CW ii) hardware behaviour: RAM/ROM windows, interrupts, timers, dual framebuffers, BCD coprocessor, and the CW ii keypad layout. |
+| [`LifeEmu/SimU8`](https://github.com/LifeEmu/SimU8) | The emulator key mailbox used by the official ES PLUS emulator ROMs. |
+| `fxesdev` / Calcupedia and the nX-U8/100 community | Documentation of the platform, ROM identification and diagnostics. |
+| [`winit`](https://crates.io/crates/winit), [`softbuffer`](https://crates.io/crates/softbuffer), [`font8x8`](https://crates.io/crates/font8x8) | Windowing, software framebuffer and the bitmap font for the desktop GUI. |
+
+Thanks also to everyone who dumped ROMs, wrote model descriptions, answered
+questions on Discord and documented the Casio platform. If we missed a credit,
+please open an issue and we will fix it.
+
+CASIO, fx-991ES and ClassWiz are trademarks of CASIO COMPUTER CO., LTD. This
+project is not affiliated with or endorsed by CASIO.
