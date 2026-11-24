@@ -4,6 +4,7 @@
 //! desktop frontend lives in `main.rs`; the WebAssembly frontend lives in the
 //! `web` crate.
 
+pub mod bcd;
 pub mod cpu;
 pub mod keys;
 pub mod machine;

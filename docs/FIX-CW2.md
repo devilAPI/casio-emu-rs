@@ -127,10 +127,17 @@ firmware's KO scan (`KI=0xF040`), which dismisses the splash.
   `csr_mask`/remap rule. All other CW ii behaviour in this build is shared
   with the three working models, so `execution_supported()` stays `true` and
   this limitation is documented rather than hidden.
-* **BCD coprocessor** is register-only: reads/writes and flag nibbles work, but
-  `RunCommand` and the 32-word macro engine are not implemented. Arithmetic
-  that depends on the coprocessor will be wrong even though boot/menu rendering
-  is fine.
+* **BCD coprocessor** (`src/bcd.rs`) implements the command unit
+  (`RunCommand`: add/sub/shift/copy/clear on the four 12-byte registers, flags,
+  leading-zero counters) and the 32-word macro sequencer used for multiply,
+  divide and shifts, ported from CasioEmuX `BCDCalc.cpp`. A command queued
+  behind a running macro stalls the CPU until it is accepted. Before this was
+  added every calculation on CW ii ROMs returned 0.
+* **fx-810 DE CW** boots to its home menu but does not react to keys: the
+  firmware leaves KO undriven and the input filter (`0xF042`) at 0 before STOP,
+  so the one-shot keyboard interrupt this emulator raises is discarded when the
+  wake-up code clears `0xF014/15`. Raising it level-sensitively livelocks in the
+  ISR, so the root cause is still open.
 * **Timing is approximate.** One `tick()` is one CPU instruction and one HSCLK
   tick; FCON's `ClockDiv`, the real 4 MHz clock ratio, instruction cycle counts
   and the watchdog/RTC peripherals are not modelled. The battery-level

@@ -80,15 +80,8 @@ pub struct CwiiState {
     /// Solar panel indicator at 0xF310 (low nibble stored, bit 4 = present).
     pub spi_indicator: u8,
     pub solar_available: bool,
-    /// Enhanced calculator (BCD coprocessor) registers.
-    pub bcd_cmd: u8,
-    pub bcd_con: u8,
-    pub bcd_mcn: u8,
-    pub bcd_mcr: u8,
-    pub bcd_flag: u8,
-    pub bcd_llz: u8,
-    pub bcd_mlz: u8,
-    pub bcd_reg: [[u8; 12]; 4],
+    /// Enhanced calculator (BCD coprocessor).
+    pub bcd: crate::bcd::Bcd,
 }
 
 impl Default for CwiiState {
@@ -125,14 +118,7 @@ impl Default for CwiiState {
             bld_test_ticks: 0,
             spi_indicator: 0,
             solar_available: false,
-            bcd_cmd: 0,
-            bcd_con: 6,
-            bcd_mcn: 0,
-            bcd_mcr: 0,
-            bcd_flag: 0,
-            bcd_llz: 0,
-            bcd_mlz: 0,
-            bcd_reg: [[0; 12]; 4],
+            bcd: crate::bcd::Bcd::new(),
         }
     }
 }
@@ -383,27 +369,23 @@ impl Machine {
             0xF310 => {
                 (self.cw.spi_indicator & 0x0F) | if self.cw.solar_available { 0x10 } else { 0 }
             }
-            0xF400 => self.cw.bcd_cmd,
-            0xF402 => self.cw.bcd_con,
-            0xF404 => self.cw.bcd_mcn & 0x1F,
-            0xF405 => 0, // macro running flag (no BCD macros implemented yet)
-            0xF410 => {
-                (if self.cw.bcd_flag & 0x80 != 0 {
+            0xF400 => self.cw.bcd.cmd,
+            0xF402 => self.cw.bcd.con,
+            0xF404 => self.cw.bcd.mcn_reg & 0x1F,
+            0xF405 => {
+                if self.cw.bcd.macro_running() {
                     0x80
                 } else {
                     0
-                }) | (if self.cw.bcd_flag & 0x40 != 0 {
-                    0x40
-                } else {
-                    0
-                })
+                }
             }
-            0xF414 => self.cw.bcd_llz,
-            0xF415 => self.cw.bcd_mlz,
-            0xF480..=0xF48B => self.cw.bcd_reg[0][off - 0x480],
-            0xF4A0..=0xF4AB => self.cw.bcd_reg[1][off - 0x4A0],
-            0xF4C0..=0xF4CB => self.cw.bcd_reg[2][off - 0x4C0],
-            0xF4E0..=0xF4EB => self.cw.bcd_reg[3][off - 0x4E0],
+            0xF410 => self.cw.bcd.flags(),
+            0xF414 => self.cw.bcd.llz,
+            0xF415 => self.cw.bcd.mlz,
+            0xF480..=0xF48B => self.cw.bcd.reg[0][off - 0x480],
+            0xF4A0..=0xF4AB => self.cw.bcd.reg[1][off - 0x4A0],
+            0xF4C0..=0xF4CB => self.cw.bcd.reg[2][off - 0x4C0],
+            0xF4E0..=0xF4EB => self.cw.bcd.reg[3][off - 0x4E0],
             _ => self.sfr[off],
         }
     }
@@ -507,16 +489,16 @@ impl Machine {
             }
             0xF0D2 => self.cw.bld_con2 = value & 0x37,
             0xF310 => self.cw.spi_indicator = value & 0x0F,
-            0xF400 => self.cw.bcd_cmd = value,
-            0xF402 => self.cw.bcd_con = value.clamp(1, 6),
-            0xF404 => self.cw.bcd_mcn = value & 0x1F,
-            0xF405 => {} // BCD macros are not implemented yet
-            0xF410 => self.cw.bcd_flag = value & 0xC0,
+            0xF400 => self.cw.bcd.write_cmd(value),
+            0xF402 => self.cw.bcd.write_con(value),
+            0xF404 => self.cw.bcd.write_mcn(value),
+            0xF405 => self.cw.bcd.write_mcr(value),
+            0xF410 => self.cw.bcd.set_flags(value),
             0xF414 | 0xF415 => {} // read-only leading-zero counters
-            0xF480..=0xF48B => self.cw.bcd_reg[0][off - 0x480] = value,
-            0xF4A0..=0xF4AB => self.cw.bcd_reg[1][off - 0x4A0] = value,
-            0xF4C0..=0xF4CB => self.cw.bcd_reg[2][off - 0x4C0] = value,
-            0xF4E0..=0xF4EB => self.cw.bcd_reg[3][off - 0x4E0] = value,
+            0xF480..=0xF48B => self.cw.bcd.reg[0][off - 0x480] = value,
+            0xF4A0..=0xF4AB => self.cw.bcd.reg[1][off - 0x4A0] = value,
+            0xF4C0..=0xF4CB => self.cw.bcd.reg[2][off - 0x4C0] = value,
+            0xF4E0..=0xF4EB => self.cw.bcd.reg[3][off - 0x4E0] = value,
             _ => self.sfr[off] = value,
         }
     }
@@ -985,6 +967,12 @@ impl Machine {
     /// Returns `false` when SBYCON put the core into HALT/STOP and no interrupt
     /// is pending yet (the CPU must not execute an instruction this tick).
     fn cw2_tick(&mut self, cpu: &mut Cpu) -> bool {
+        // BCD macro sequencer runs one instruction per cycle, independent of
+        // the core; a command queued behind a running macro stalls the CPU.
+        self.cw.bcd.tick();
+        if self.cw.bcd.cpu_stalled() {
+            return false;
+        }
         // Battery-level detector: a healthy virtual battery always passes.
         if self.cw.bld_test_ticks > 0 {
             self.cw.bld_test_ticks -= 1;
