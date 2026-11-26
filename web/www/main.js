@@ -321,10 +321,12 @@ function frame() {
     // Time-budget the emulation so pointer/keyboard events are handled every
     // frame even on slower machines.  Wasm calls are batched to reduce
     // boundary overhead.
-    const deadline = performance.now() + 6;
+    // ~12ms of a 16ms frame: drawing is cheap, and a short slice left busy
+    // firmware (menu redraws) running well below real-hardware speed.
+    const deadline = performance.now() + 12;
     let batches = 0;
     do {
-      emu.step(2000);
+      emu.step(4096);
       batches++;
     } while (performance.now() < deadline && batches < 64);
   }

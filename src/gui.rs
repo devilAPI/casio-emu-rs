@@ -47,7 +47,9 @@ const HELP1: &str = "0-9 . + - * /   Enter   Esc AC";
 const HELP2: &str = "F8 models   F6/F7 cycle   tap keys";
 
 /// Emulation is time-budgeted so event handling and drawing always get a slot.
-const TICK_BUDGET: Duration = Duration::from_millis(5);
+/// Drawing a frame takes ~1ms, so most of the 16ms frame goes to the core:
+/// a 5ms slice left busy firmware (menu redraws) running below real speed.
+const TICK_BUDGET: Duration = Duration::from_millis(12);
 const MAX_STEPS: u32 = 240_000;
 const FRAME_TIME: Duration = Duration::from_millis(16);
 /// A tap or click is held this long so the firmware's matrix scan sees it.
@@ -409,8 +411,16 @@ fn key_rect_units(keys: &[keys::CalcKey], k: &keys::CalcKey) -> (f32, f32, f32, 
     }
     // Also bounded by the key's own size so sparse rows (large gaps) do not
     // inflate a key far beyond its siblings.
-    let dx = if gx == f32::MAX { 0.0 } else { (gx * GROW).min((x1 - x0) * 0.18) };
-    let dy = if gy == f32::MAX { 0.0 } else { (gy * GROW).min((y1 - y0) * 0.18) };
+    let dx = if gx == f32::MAX {
+        0.0
+    } else {
+        (gx * GROW).min((x1 - x0) * 0.18)
+    };
+    let dy = if gy == f32::MAX {
+        0.0
+    } else {
+        (gy * GROW).min((y1 - y0) * 0.18)
+    };
     (x0 - dx, y0 - dy, x1 + dx, y1 + dy)
 }
 
@@ -420,13 +430,10 @@ fn hit_key(l: &Layout, model: Model, x: f32, y: f32) -> Option<&'static keys::Ca
     }
     let gx = (x - l.keys.x as f32) / l.cell_x;
     let gy = (y - l.keys.y as f32) / l.cell_y;
-    model
-        .keys
-        .iter()
-        .find(|k| {
-            let (x0, y0, x1, y1) = key_rect_units(model.keys, k);
-            gx >= x0 && gx <= x1 && gy >= y0 && gy <= y1
-        })
+    model.keys.iter().find(|k| {
+        let (x0, y0, x1, y1) = key_rect_units(model.keys, k);
+        gx >= x0 && gx <= x1 && gy >= y0 && gy <= y1
+    })
 }
 
 // ---------------------------------------------------------------------------

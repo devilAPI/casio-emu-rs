@@ -1216,6 +1216,16 @@ impl Bus for Machine {
     fn read_code(&mut self, csr: u8, offset: u16, size: usize) -> u64 {
         if self.model.board == BoardKind::ClassWizII {
             let csr = csr & self.model.csr_mask;
+            // Fast path for the instruction fetch: both bytes in one mapped
+            // window (the unmapped windows all start on even offsets).
+            if size == 2 && offset & 1 == 0 {
+                if let Some(a) = Self::cw2_code_addr(csr, offset) {
+                    let a = a as usize;
+                    if let Some(b) = self.rom.get(a..a + 2) {
+                        return u16::from_le_bytes([b[0], b[1]]) as u64;
+                    }
+                }
+            }
             let mut val = 0u64;
             for i in 0..size {
                 let byte = Self::cw2_code_addr(csr, offset.wrapping_add(i as u16))

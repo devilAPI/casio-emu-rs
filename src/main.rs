@@ -311,8 +311,11 @@ fn run_headless(
     let mut cpu = Cpu::new();
     cpu.reset(&mut machine);
 
-    let key_at =
-        |n: usize| -> Option<(u8, u8)> { script.get(n).and_then(|s| keys::lookup(model.keys, s.as_str())) };
+    let key_at = |n: usize| -> Option<(u8, u8)> {
+        script
+            .get(n)
+            .and_then(|s| keys::lookup(model.keys, s.as_str()))
+    };
 
     let mut held = false;
     let mut key_index = 0usize;

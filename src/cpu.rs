@@ -388,8 +388,9 @@ impl Cpu {
 }
 
 #[inline]
-fn decode(word: u16) -> Option<&'static InstrSpec> {
-    for spec in TABLE {
+/// Linear table match, used once per opcode to build [`decode_table`].
+fn decode_slow(word: u16) -> Option<u16> {
+    for (i, spec) in TABLE.iter().enumerate() {
         let mut mask: u16 = 0;
         if !is_none(spec.op0) {
             mask |= spec.op0.mask;
@@ -399,10 +400,26 @@ fn decode(word: u16) -> Option<&'static InstrSpec> {
         }
         mask ^= 0xffff;
         if (word & mask) == spec.mask {
-            return Some(spec);
+            return Some(i as u16);
         }
     }
     None
+}
+
+/// Opcode -> `TABLE` index for all 65536 instruction words (`u16::MAX` =
+/// undefined).  Scanning the table on every step dominated emulation time.
+fn decode_table() -> &'static [u16] {
+    static LUT: std::sync::OnceLock<Box<[u16]>> = std::sync::OnceLock::new();
+    LUT.get_or_init(|| {
+        (0..=u16::MAX)
+            .map(|w| decode_slow(w).unwrap_or(u16::MAX))
+            .collect()
+    })
+}
+
+#[inline]
+fn decode(word: u16) -> Option<&'static InstrSpec> {
+    TABLE.get(decode_table()[word as usize] as usize)
 }
 
 #[inline]
