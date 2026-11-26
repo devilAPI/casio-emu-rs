@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "casio-emu-rs"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "font8x8",
  "softbuffer",
@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "casio-emu-web"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "casio-emu-rs",
  "console_error_panic_hook",
